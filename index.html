@@ -678,6 +678,15 @@
                 this.render();
             }
 
+            zoomAtPoint(mouseX, mouseY, newScale) {
+                const worldX = mouseX / this.camera.scale + this.camera.x;
+                const worldY = mouseY / this.camera.scale + this.camera.y;
+
+                this.camera.scale = newScale;
+                this.camera.x = worldX - mouseX / newScale;
+                this.camera.y = worldY - mouseY / newScale;
+            }
+
             handleWheel(e) {
                 if (!e.deltaY) return;
                 e.preventDefault();
@@ -685,15 +694,11 @@
                 const rect = this.canvas.getBoundingClientRect();
                 const screenX = e.clientX - rect.left;
                 const screenY = e.clientY - rect.top;
-                const worldBefore = this.screenToWorld(screenX, screenY);
-
                 const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
                 const newScale = Math.min(5, Math.max(0.1, this.camera.scale * zoomFactor));
                 if (newScale === this.camera.scale) return;
 
-                this.camera.scale = newScale;
-                this.camera.x = worldBefore.x - screenX / this.camera.scale;
-                this.camera.y = worldBefore.y - screenY / this.camera.scale;
+                this.zoomAtPoint(screenX, screenY, newScale);
                 this.render();
             }
 
