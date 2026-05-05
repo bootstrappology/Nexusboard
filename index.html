@@ -627,6 +627,70 @@
                 };
             }
 
+            getVisibleBounds() {
+                const left = this.camera.x;
+                const top = this.camera.y;
+                return {
+                    left,
+                    top,
+                    right: left + this.canvas.width / this.camera.scale,
+                    bottom: top + this.canvas.height / this.camera.scale
+                };
+            }
+
+            snapToGrid(value, gridSize = 120) {
+                return Math.round(value / gridSize) * gridSize;
+            }
+
+            isPositionOverlapping(x, y, radius = 40, padding = 24, existingNodes = null) {
+                const nodes = existingNodes || this.nodes;
+                return nodes.some(node => {
+                    const dx = node.x - x;
+                    const dy = node.y - y;
+                    const minDist = (node.radius || 40) + radius + padding;
+                    return dx * dx + dy * dy < minDist * minDist;
+                });
+            }
+
+            findNonOverlappingPosition(preferred = null, existingNodes = null) {
+                const bounds = this.getVisibleBounds();
+                const minX = bounds.left + 80;
+                const maxX = bounds.right - 80;
+                const minY = bounds.top + 80;
+                const maxY = bounds.bottom - 80;
+                const startX = Math.min(Math.max(preferred?.x ?? (bounds.left + bounds.right) / 2, minX), maxX);
+                const startY = Math.min(Math.max(preferred?.y ?? (bounds.top + bounds.bottom) / 2, minY), maxY);
+                const gridStep = 120;
+                const nodesToCheck = existingNodes || this.nodes;
+
+                for (let ring = 0; ring <= 8; ring++) {
+                    for (let dx = -ring; dx <= ring; dx++) {
+                        for (let dy = -ring; dy <= ring; dy++) {
+                            if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
+                            const x = this.snapToGrid(startX + dx * gridStep, gridStep);
+                            const y = this.snapToGrid(startY + dy * gridStep, gridStep);
+                            if (x < minX || x > maxX || y < minY || y > maxY) continue;
+                            if (!this.isPositionOverlapping(x, y, 40, 20, nodesToCheck)) {
+                                return { x, y };
+                            }
+                        }
+                    }
+                }
+
+                return { x: this.snapToGrid(startX, gridStep), y: this.snapToGrid(startY, gridStep) };
+            }
+
+            spaceNodesForTemplate(nodes) {
+                const positioned = [];
+                for (const node of nodes) {
+                    const desired = { x: node.x, y: node.y };
+                    const safePosition = this.findNonOverlappingPosition(desired, positioned);
+                    node.x = safePosition.x;
+                    node.y = safePosition.y;
+                    positioned.push(node);
+                }
+            }
+
             worldToScreen(x, y) {
                 return {
                     x: (x - this.camera.x) * this.camera.scale,
@@ -949,9 +1013,10 @@
                     y: this.camera.y + viewHeight / 2
                 };
                 const position = this.cursorPosition || center;
+                const safePosition = this.findNonOverlappingPosition(position);
                 const node = new Node(
-                    position.x,
-                    position.y,
+                    safePosition.x,
+                    safePosition.y,
                     label,
                     tags,
                     metadata
@@ -1154,11 +1219,13 @@
                 if (!preset) return;
 
                 const nodes = preset.nodes.map(data => new Node(data.x, data.y, data.label, data.tags, data.metadata));
+                this.spaceNodesForTemplate(nodes);
                 const connections = preset.connections.map(data => new Connection(nodes[data.from].id, nodes[data.to].id, data.label));
                 this.nodes = nodes;
                 this.connections = connections;
                 this.save();
                 this.updateUI();
+                this.resetView();
                 this.render();
                 const select = document.getElementById('presetSelect');
                 if (select) select.value = '';
@@ -1742,6 +1809,7 @@
                             this.connections = (state.connections || []).map(c => Connection.fromJSON(c));
                             this.updateUI();
                             this.saveState();
+                            this.resetView();
                             return;
                         } catch (err) {
                             console.error('Invalid shared board state:', err);
@@ -1760,6 +1828,7 @@
                     
                     this.updateUI();
                     this.saveState();
+                    this.resetView();
                 } catch (e) {
                     console.error('Failed to load data:', e);
                 }
