@@ -224,6 +224,22 @@
             z-index: 100;
         }
 
+        .zoom-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid #334155;
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-size: 12px;
+            color: #e2e8f0;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
         .info-panel strong {
             color: #e2e8f0;
         }
@@ -408,6 +424,7 @@
                     <option value="team">Team Network</option>
                     <option value="idea">Idea Web</option>
                 </select>
+                <button class="btn-secondary" onclick="nexusApp.resetView()">Reset View</button>
                 <button class="btn-secondary" onclick="nexusApp.copyShareLink()">Share</button>
             </div>
 
@@ -430,6 +447,7 @@
         <div class="canvas-container">
             <canvas id="canvas"></canvas>
             <div class="canvas-overlay" id="canvasOverlay"></div>
+            <div class="zoom-indicator" id="zoomIndicator">100%</div>
             <div class="info-panel">
                 <strong>Nodes:</strong> <span id="nodeCount">0</span> | 
                 <strong>Connections:</strong> <span id="connectionCount">0</span>
@@ -523,7 +541,7 @@
                 this.hoveredNode = null;
                 this.searchQuery = '';
                 this.searchMatches = new Set();
-                this.cursorPosition = { x: 0, y: 0 };
+                this.cursorPosition = null;
 
                 this.camera = {
                     x: 0,
@@ -883,9 +901,14 @@
                 
                 const viewWidth = this.canvas.width / this.camera.scale;
                 const viewHeight = this.canvas.height / this.camera.scale;
+                const center = {
+                    x: this.camera.x + viewWidth / 2,
+                    y: this.camera.y + viewHeight / 2
+                };
+                const position = this.cursorPosition || center;
                 const node = new Node(
-                    this.camera.x + Math.random() * (viewWidth - 200) + 100,
-                    this.camera.y + Math.random() * (viewHeight - 200) + 100,
+                    position.x,
+                    position.y,
                     label,
                     tags,
                     metadata
@@ -901,6 +924,33 @@
                 tagsInput.value = '';
                 metadataInput.value = '';
                 labelInput.focus();
+            }
+
+            resetView() {
+                if (this.nodes.length === 0) {
+                    this.camera = { x: 0, y: 0, scale: 1 };
+                } else {
+                    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                    for (const node of this.nodes) {
+                        minX = Math.min(minX, node.x - node.radius);
+                        minY = Math.min(minY, node.y - node.radius);
+                        maxX = Math.max(maxX, node.x + node.radius);
+                        maxY = Math.max(maxY, node.y + node.radius);
+                    }
+
+                    const margin = 160;
+                    const worldWidth = Math.max(400, maxX - minX + margin);
+                    const worldHeight = Math.max(300, maxY - minY + margin);
+                    const scaleX = this.canvas.width / worldWidth;
+                    const scaleY = this.canvas.height / worldHeight;
+                    const newScale = Math.min(5, Math.max(0.1, Math.min(scaleX, scaleY)));
+
+                    this.camera.scale = newScale;
+                    this.camera.x = minX - margin / 2;
+                    this.camera.y = minY - margin / 2;
+                }
+
+                this.render();
             }
 
             deleteNode(nodeId) {
@@ -1355,6 +1405,21 @@
                     -this.camera.y * this.camera.scale
                 );
 
+                const gridSize = 80;
+                const left = this.camera.x;
+                const top = this.camera.y;
+                const right = this.camera.x + this.canvas.width / this.camera.scale;
+                const bottom = this.camera.y + this.canvas.height / this.camera.scale;
+                const dotRadius = 1.2 / this.camera.scale;
+                this.ctx.fillStyle = 'rgba(148, 163, 184, 0.08)';
+                for (let x = Math.floor(left / gridSize) * gridSize; x <= right; x += gridSize) {
+                    for (let y = Math.floor(top / gridSize) * gridSize; y <= bottom; y += gridSize) {
+                        this.ctx.beginPath();
+                        this.ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
+                        this.ctx.fill();
+                    }
+                }
+
                 // Draw connections
                 for (const conn of this.connections) {
                     const fromNode = this.nodes.find(n => n.id === conn.fromNodeId);
@@ -1382,6 +1447,24 @@
                 }
 
                 this.ctx.restore();
+                const zoomIndicator = document.getElementById('zoomIndicator');
+                if (zoomIndicator) {
+                    zoomIndicator.textContent = `${Math.round(this.camera.scale * 100)}%`;
+                }
+            }
+
+            drawRoundedRect(ctx, x, y, width, height, radius) {
+                ctx.beginPath();
+                ctx.moveTo(x + radius, y);
+                ctx.lineTo(x + width - radius, y);
+                ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+                ctx.lineTo(x + width, y + height - radius);
+                ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+                ctx.lineTo(x + radius, y + height);
+                ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+                ctx.lineTo(x, y + radius);
+                ctx.quadraticCurveTo(x, y, x + radius, y);
+                ctx.closePath();
             }
 
             drawNode(node, highlighted = false) {
@@ -1411,11 +1494,22 @@
                     gradient.addColorStop(1, '#334155');
                 }
                 
+                const width = node.radius * 2.6;
+                const height = node.radius * 1.5;
+                const x = node.x - width / 2;
+                const y = node.y - height / 2;
+                const corner = Math.min(18, node.radius / 1.4);
+
+                this.ctx.save();
+                this.ctx.shadowColor = 'rgba(15, 23, 42, 0.35)';
+                this.ctx.shadowBlur = 16 / this.camera.scale;
+                this.ctx.shadowOffsetX = 0;
+                this.ctx.shadowOffsetY = 8 / this.camera.scale;
                 this.ctx.fillStyle = gradient;
-                this.ctx.beginPath();
-                this.ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+                this.drawRoundedRect(this.ctx, x, y, width, height, corner);
                 this.ctx.fill();
-                
+                this.ctx.restore();
+
                 let strokeColor = '#94a3b8';
                 let strokeWidth = 2 / this.camera.scale;
                 
@@ -1429,6 +1523,7 @@
                 
                 this.ctx.strokeStyle = strokeColor;
                 this.ctx.lineWidth = strokeWidth;
+                this.drawRoundedRect(this.ctx, x, y, width, height, corner);
                 this.ctx.stroke();
                 
                 this.ctx.fillStyle = '#e2e8f0';
@@ -1481,9 +1576,10 @@
                 
                 this.ctx.strokeStyle = '#64748b';
                 this.ctx.lineWidth = 2 / this.camera.scale;
+                const midX = (fromX + toX) / 2;
                 this.ctx.beginPath();
                 this.ctx.moveTo(fromX, fromY);
-                this.ctx.lineTo(toX, toY);
+                this.ctx.bezierCurveTo(midX, fromY, midX, toY, toX, toY);
                 this.ctx.stroke();
                 
                 // Draw arrow
