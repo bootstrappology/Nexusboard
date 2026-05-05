@@ -661,7 +661,7 @@ But there's one issue in the data:
                 
                 this.setupCanvas();
                 this.setupEventListeners();
-                this.load();
+                this.load(); setTimeout(() => { this.resizeCanvas(); this.render(); }, 200);
                 this.render();
             }
 
