@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexusBoard - Local-First Node Canvas</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+            gap: 1px;
+            background: #1e293b;
+        }
+
+        .sidebar {
+            width: 320px;
+            background: #0f172a;
+            border-right: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow-y: auto;
+            box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .sidebar h1 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .create-panel {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #94a3b8;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: #e2e8f0;
+            font-size: 13px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #60a5fa;
+            background: #1e293b;
+            box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 10px 16px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .nodes-list {
+            flex: 1;
+        }
+
+        .nodes-list h2 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #cbd5e1;
+            margin: 20px 0 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #334155;
+        }
+
+        .node-item {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .node-item:hover {
+            border-color: #60a5fa;
+            background: #1e293b;
+            box-shadow: 0 4px 12px rgba(96, 165, 250, 0.15);
+        }
+
+        .node-item-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .node-item-label {
+            font-weight: 600;
+            font-size: 13px;
+            color: #e2e8f0;
+            word-break: break-word;
+        }
+
+        .node-item-tags {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
+        .node-item-delete {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid #ef4444;
+            color: #fca5a5;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .node-item-delete:hover {
+            background: rgba(239, 68, 68, 0.4);
+            color: #fecaca;
+        }
+
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            cursor: crosshair;
+            background: inherit;
+        }
+
+        .canvas-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+        }
+
+        .info-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 12px;
+            color: #94a3b8;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+        }
+
+        .info-panel strong {
+            color: #e2e8f0;
+        }
+
+        .connection-label {
+            position: absolute;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid #334155;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 11px;
+            color: #cbd5e1;
+            backdrop-filter: blur(10px);
+            display: none;
+            z-index: 50;
+            pointer-events: none;
+        }
+
+        .connection-label.visible {
+            display: block;
+        }
+
+        @media (max-width: 1024px) {
+            .sidebar {
+                width: 280px;
+                font-size: 14px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .app-container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid #334155;
+                max-height: 200px;
+            }
+
+            .canvas-container {
+                flex: 1;
+            }
+        }
+
+        .tag {
+            display: inline-block;
+            background: rgba(96, 165, 250, 0.15);
+            border: 1px solid #3b82f6;
+            color: #93c5fd;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            margin-right: 4px;
+            margin-top: 4px;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .btn-secondary {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            flex: 1;
+            text-align: center;
+        }
+
+        .btn-secondary:hover {
+            border-color: #60a5fa;
+            background: #0f172a;
+            box-shadow: 0 4px 12px rgba(96, 165, 250, 0.15);
+        }
+
+        .preset-select {
+            appearance: none;
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            border-radius: 6px;
+            padding: 10px 12px;
+            font-size: 12px;
+            font-family: inherit;
+            cursor: pointer;
+            flex: 2;
+            min-width: 160px;
+            transition: all 0.2s;
+        }
+
+        .preset-select:focus {
+            outline: none;
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .search-container {
+            margin-bottom: 20px;
+        }
+
+        .search-container input {
+            width: 100%;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 10px 12px;
+            color: #e2e8f0;
+            font-size: 13px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .search-container input:focus {
+            outline: none;
+            border-color: #60a5fa;
+            background: #1e293b;
+            box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+        }
+
+        .search-results {
+            font-size: 11px;
+            color: #94a3b8;
+            padding: 8px 0;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 8px;
+        }
+
+        .node-item.search-match {
+            border-color: #fbbf24;
+            background: rgba(251, 191, 36, 0.1);
+        }
+
+        .node-highlight {
+            filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.6));
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="sidebar">
+            <h1>NexusBoard</h1>
+            
+            <div class="create-panel">
+                <div class="form-group">
+                    <label>Node Label</label>
+                    <input type="text" id="nodeLabel" placeholder="e.g., Design System" maxlength="100">
+                </div>
+                <div class="form-group">
+                    <label>Tags (comma-separated)</label>
+                    <input type="text" id="nodeTags" placeholder="e.g., ui, design, core" maxlength="200">
+                </div>
+                <div class="form-group">
+                    <label>Metadata (JSON)</label>
+                    <textarea id="nodeMetadata" placeholder='{"key": "value"}'></textarea>
+                </div>
+                <button class="btn-primary" onclick="nexusApp.createNode()">Create Node</button>
+            </div>
+
+            <div class="toolbar">
+                <select id="presetSelect" class="preset-select" onchange="nexusApp.loadPreset(this.value)">
+                    <option value="">Load template...</option>
+                    <option value="startup">Startup Map</option>
+                    <option value="team">Team Network</option>
+                    <option value="idea">Idea Web</option>
+                </select>
+                <button class="btn-secondary" onclick="nexusApp.copyShareLink()">Share</button>
+            </div>
+
+            <div class="toolbar">
+                <button class="btn-secondary" onclick="nexusApp.exportToJSON()">Export</button>
+                <button class="btn-secondary" onclick="document.getElementById('fileInput').click()">Import</button>
+                <input type="file" id="fileInput" accept="application/json" onchange="nexusApp.importFromJSON(event)">
+            </div>
+
+            <div class="search-container">
+                <input type="text" id="searchInput" placeholder="Search nodes..." onkeyup="nexusApp.search(this.value)">
+                <div class="search-results" id="searchResults"></div>
+            </div>
+                <h2>Nodes</h2>
+                <div id="nodesList"></div>
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <canvas id="canvas"></canvas>
+            <div class="canvas-overlay" id="canvasOverlay"></div>
+            <div class="info-panel">
+                <strong>Nodes:</strong> <span id="nodeCount">0</span> | 
+                <strong>Connections:</strong> <span id="connectionCount">0</span>
+                <br><strong>Hint:</strong> Click to create/connect, drag to move, right-click to delete
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================================
+        // DATA MODEL & PERSISTENCE
+        // ============================================================================
+
+        class Node {
+            constructor(x, y, label = '', tags = [], metadata = {}) {
+                this.id = 'node_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                this.label = label;
+                this.tags = tags;
+                this.x = x;
+                this.y = y;
+                this.radius = 40;
+                this.timestamp = new Date().toISOString();
+                this.metadata = metadata;
+            }
+
+            toJSON() {
+                return {
+                    id: this.id,
+                    label: this.label,
+                    tags: this.tags,
+                    x: this.x,
+                    y: this.y,
+                    radius: this.radius,
+                    timestamp: this.timestamp,
+                    metadata: this.metadata
+                };
+            }
+
+            static fromJSON(data) {
+                const node = new Node(data.x, data.y, data.label, data.tags, data.metadata);
+                node.id = data.id;
+                node.timestamp = data.timestamp;
+                return node;
+            }
+
+            contains(x, y) {
+                const dx = x - this.x;
+                const dy = y - this.y;
+                return dx * dx + dy * dy <= this.radius * this.radius;
+            }
+        }
+
+        class Connection {
+            constructor(fromNodeId, toNodeId, label = '') {
+                this.id = 'conn_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                this.fromNodeId = fromNodeId;
+                this.toNodeId = toNodeId;
+                this.label = label;
+                this.timestamp = new Date().toISOString();
+            }
+
+            toJSON() {
+                return {
+                    id: this.id,
+                    fromNodeId: this.fromNodeId,
+                    toNodeId: this.toNodeId,
+                    label: this.label,
+                    timestamp: this.timestamp
+                };
+            }
+
+            static fromJSON(data) {
+                const conn = new Connection(data.fromNodeId, data.toNodeId, data.label);
+                conn.id = data.id;
+                conn.timestamp = data.timestamp;
+                return conn;
+            }
+        }
+
+        class NexusBoardApp {
+            constructor() {
+                this.canvas = document.getElementById('canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.canvasOverlay = document.getElementById('canvasOverlay');
+                
+                this.nodes = [];
+                this.connections = [];
+                this.draggedNode = null;
+                this.connectingFrom = null;
+                this.hoveredNode = null;
+                this.searchQuery = '';
+                this.searchMatches = new Set();
+                
+                this.setupCanvas();
+                this.setupEventListeners();
+                this.load();
+                this.render();
+            }
+
+            setupCanvas() {
+                const rect = this.canvas.parentElement.getBoundingClientRect();
+                this.canvas.width = rect.width;
+                this.canvas.height = rect.height;
+                window.addEventListener('resize', () => this.handleResize());
+            }
+
+            handleResize() {
+                const rect = this.canvas.parentElement.getBoundingClientRect();
+                this.canvas.width = rect.width;
+                this.canvas.height = rect.height;
+                this.render();
+            }
+
+            setupEventListeners() {
+                this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
+                this.canvas.addEventListener('contextmenu', (e) => this.handleRightClick(e));
+                this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+                this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+                this.canvas.addEventListener('mouseup', () => this.handleMouseUp());
+                this.canvas.addEventListener('mouseleave', () => this.handleMouseUp());
+            }
+
+            getMousePos(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                return {
+                    x: e.clientX - rect.left,
+                    y: e.clientY - rect.top
+                };
+            }
+
+            getNodeAtPos(x, y) {
+                for (let i = this.nodes.length - 1; i >= 0; i--) {
+                    if (this.nodes[i].contains(x, y)) {
+                        return this.nodes[i];
+                    }
+                }
+                return null;
+            }
+
+            handleMouseDown(e) {
+                const pos = this.getMousePos(e);
+                const node = this.getNodeAtPos(pos.x, pos.y);
+                
+                if (node) {
+                    this.draggedNode = node;
+                }
+            }
+
+            handleMouseMove(e) {
+                const pos = this.getMousePos(e);
+                
+                if (this.draggedNode) {
+                    this.draggedNode.x = pos.x;
+                    this.draggedNode.y = pos.y;
+                    this.save();
+                    this.render();
+                } else {
+                    const node = this.getNodeAtPos(pos.x, pos.y);
+                    if (node !== this.hoveredNode) {
+                        this.hoveredNode = node;
+                        this.render();
+                    }
+                }
+            }
+
+            handleMouseUp() {
+                this.draggedNode = null;
+                this.render();
+            }
+
+            handleCanvasClick(e) {
+                const pos = this.getMousePos(e);
+                const node = this.getNodeAtPos(pos.x, pos.y);
+                
+                if (e.ctrlKey || e.metaKey) {
+                    // Connection mode
+                    if (!node) return;
+                    
+                    if (!this.connectingFrom) {
+                        this.connectingFrom = node;
+                    } else if (node === this.connectingFrom) {
+                        this.connectingFrom = null;
+                    } else {
+                        const conn = new Connection(this.connectingFrom.id, node.id);
+                        this.connections.push(conn);
+                        this.connectingFrom = null;
+                        this.save();
+                        this.render();
+                        this.updateUI();
+                    }
+                } else {
+                    // Click on node to select/deselect
+                    if (node) {
+                        this.highlightNode(node);
+                    }
+                }
+            }
+
+            handleRightClick(e) {
+                e.preventDefault();
+                const pos = this.getMousePos(e);
+                const node = this.getNodeAtPos(pos.x, pos.y);
+                
+                if (node) {
+                    this.deleteNode(node.id);
+                }
+            }
+
+            highlightNode(node) {
+                // Scroll node into view in sidebar
+                const nodesList = document.getElementById('nodesList');
+                const nodeElement = nodesList.querySelector(`[data-node-id="${node.id}"]`);
+                if (nodeElement) {
+                    nodeElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }
+
+            createNode() {
+                const labelInput = document.getElementById('nodeLabel');
+                const tagsInput = document.getElementById('nodeTags');
+                const metadataInput = document.getElementById('nodeMetadata');
+                
+                const label = labelInput.value.trim();
+                if (!label) {
+                    alert('Please enter a node label');
+                    return;
+                }
+                
+                const tags = tagsInput.value
+                    .split(',')
+                    .map(t => t.trim())
+                    .filter(t => t.length > 0);
+                
+                let metadata = {};
+                if (metadataInput.value.trim()) {
+                    try {
+                        metadata = JSON.parse(metadataInput.value);
+                    } catch (e) {
+                        alert('Invalid JSON in metadata');
+                        return;
+                    }
+                }
+                
+                const node = new Node(
+                    Math.random() * (this.canvas.width - 200) + 100,
+                    Math.random() * (this.canvas.height - 200) + 100,
+                    label,
+                    tags,
+                    metadata
+                );
+                
+                this.nodes.push(node);
+                this.save();
+                this.render();
+                this.updateUI();
+                
+                labelInput.value = '';
+                tagsInput.value = '';
+                metadataInput.value = '';
+                labelInput.focus();
+            }
+
+            deleteNode(nodeId) {
+                this.nodes = this.nodes.filter(n => n.id !== nodeId);
+                this.connections = this.connections.filter(c => 
+                    c.fromNodeId !== nodeId && c.toNodeId !== nodeId
+                );
+                this.save();
+                this.render();
+                this.updateUI();
+            }
+
+            deleteConnection(connectionId) {
+                this.connections = this.connections.filter(c => c.id !== connectionId);
+                this.save();
+                this.render();
+                this.updateUI();
+            }
+
+            search(query) {
+                this.searchQuery = query.toLowerCase().trim();
+                this.searchMatches.clear();
+                
+                if (this.searchQuery.length === 0) {
+                    document.getElementById('searchResults').textContent = '';
+                    this.updateUI();
+                    this.render();
+                    return;
+                }
+                
+                for (const node of this.nodes) {
+                    const labelMatch = node.label.toLowerCase().includes(this.searchQuery);
+                    const tagsMatch = node.tags.some(tag => tag.toLowerCase().includes(this.searchQuery));
+                    
+                    if (labelMatch || tagsMatch) {
+                        this.searchMatches.add(node.id);
+                    }
+                }
+                
+                const count = this.searchMatches.size;
+                document.getElementById('searchResults').textContent = 
+                    count > 0 ? `Found ${count} node${count !== 1 ? 's' : ''}` : 'No matches';
+                
+                this.updateUI();
+                this.render();
+            }
+
+            getStatePayload() {
+                return {
+                    nodes: this.nodes.map(n => n.toJSON()),
+                    connections: this.connections.map(c => c.toJSON())
+                };
+            }
+
+            encodeState(data) {
+                const json = JSON.stringify(data);
+                const encoded = encodeURIComponent(json).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode('0x' + p1));
+                return btoa(encoded);
+            }
+
+            decodeState(value) {
+                const json = decodeURIComponent(Array.from(atob(value), c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+                return JSON.parse(json);
+            }
+
+            loadFromState(data, replaceUrl = false) {
+                this.nodes = (data.nodes || []).map(n => Node.fromJSON(n));
+                this.connections = (data.connections || []).map(c => Connection.fromJSON(c));
+                this.save();
+                this.updateUI();
+                this.render();
+                if (replaceUrl) {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('board', this.encodeState(this.getStatePayload()));
+                    window.history.replaceState({}, '', url);
+                }
+            }
+
+            applyTemplateData(data) {
+                this.nodes = data.nodes.map(n => Node.fromJSON(n));
+                this.connections = data.connections.map(c => Connection.fromJSON(c));
+                this.save();
+                this.updateUI();
+                this.render();
+                const params = new URLSearchParams(window.location.search);
+                if (params.has('board')) {
+                    params.delete('board');
+                    window.history.replaceState({}, '', window.location.pathname);
+                }
+            }
+
+            loadPreset(key) {
+                if (!key) return;
+                const w = this.canvas.width;
+                const h = this.canvas.height;
+                const centerX = w / 2;
+                const centerY = h / 2;
+                const offset = 160;
+                const presets = {
+                    startup: {
+                        nodes: [
+                            { x: centerX - offset, y: centerY - 40, label: 'Founder', tags: ['vision'], metadata: {} },
+                            { x: centerX + offset, y: centerY - 40, label: 'Product', tags: ['core'], metadata: {} },
+                            { x: centerX, y: centerY + 40, label: 'Users', tags: ['audience'], metadata: {} },
+                            { x: centerX - 120, y: centerY + 140, label: 'Funding', tags: ['capital'], metadata: {} },
+                            { x: centerX + 120, y: centerY + 140, label: 'Growth', tags: ['traction'], metadata: {} }
+                        ],
+                        connections: [
+                            { from: 0, to: 1, label: 'builds' },
+                            { from: 1, to: 2, label: 'serves' },
+                            { from: 1, to: 4, label: 'drives' },
+                            { from: 3, to: 4, label: 'fuels' }
+                        ]
+                    },
+                    team: {
+                        nodes: [
+                            { x: centerX, y: centerY - 120, label: 'Product', tags: ['strategy'], metadata: {} },
+                            { x: centerX - 160, y: centerY - 20, label: 'Design', tags: ['ux'], metadata: {} },
+                            { x: centerX + 160, y: centerY - 20, label: 'Engineering', tags: ['build'], metadata: {} },
+                            { x: centerX - 160, y: centerY + 120, label: 'Marketing', tags: ['launch'], metadata: {} },
+                            { x: centerX + 160, y: centerY + 120, label: 'Support', tags: ['care'], metadata: {} }
+                        ],
+                        connections: [
+                            { from: 0, to: 1, label: 'guides' },
+                            { from: 0, to: 2, label: 'plans' },
+                            { from: 1, to: 3, label: 'aligns' },
+                            { from: 2, to: 4, label: 'supports' },
+                            { from: 3, to: 4, label: 'promotes' }
+                        ]
+                    },
+                    idea: {
+                        nodes: [
+                            { x: centerX, y: centerY - 120, label: 'Idea', tags: ['spark'], metadata: {} },
+                            { x: centerX - 180, y: centerY, label: 'Research', tags: ['insights'], metadata: {} },
+                            { x: centerX + 180, y: centerY, label: 'Prototype', tags: ['test'], metadata: {} },
+                            { x: centerX - 90, y: centerY + 140, label: 'Feedback', tags: ['input'], metadata: {} },
+                            { x: centerX + 90, y: centerY + 140, label: 'Launch', tags: ['release'], metadata: {} },
+                            { x: centerX, y: centerY + 40, label: 'Iterate', tags: ['refine'], metadata: {} }
+                        ],
+                        connections: [
+                            { from: 0, to: 1, label: 'explore' },
+                            { from: 0, to: 2, label: 'prototype' },
+                            { from: 1, to: 3, label: 'learn' },
+                            { from: 2, to: 4, label: 'release' },
+                            { from: 3, to: 5, label: 'adjust' },
+                            { from: 5, to: 2, label: 'build again' }
+                        ]
+                    }
+                };
+
+                const preset = presets[key];
+                if (!preset) return;
+
+                const nodes = preset.nodes.map(data => new Node(data.x, data.y, data.label, data.tags, data.metadata));
+                const connections = preset.connections.map(data => new Connection(nodes[data.from].id, nodes[data.to].id, data.label));
+                this.nodes = nodes;
+                this.connections = connections;
+                this.save();
+                this.updateUI();
+                this.render();
+                const select = document.getElementById('presetSelect');
+                if (select) select.value = '';
+                const params = new URLSearchParams(window.location.search);
+                if (params.has('board')) {
+                    params.delete('board');
+                    window.history.replaceState({}, '', window.location.pathname);
+                }
+            }
+
+            copyShareLink() {
+                const data = this.getStatePayload();
+                const boardValue = this.encodeState(data);
+                const url = new URL(window.location.href);
+                url.searchParams.set('board', boardValue);
+                window.history.replaceState({}, '', url);
+
+                const shareUrl = url.toString();
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(shareUrl).then(() => {
+                        alert('Share link copied to clipboard');
+                    }).catch(() => {
+                        prompt('Copy this share link:', shareUrl);
+                    });
+                } else {
+                    prompt('Copy this share link:', shareUrl);
+                }
+            }
+
+            exportToJSON() {
+                const data = {
+                    nodes: this.nodes.map(n => n.toJSON()),
+                    connections: this.connections.map(c => c.toJSON()),
+                    exportedAt: new Date().toISOString(),
+                    version: '1.0'
+                };
+                
+                const json = JSON.stringify(data, null, 2);
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `nexusboard-${Date.now()}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            }
+
+            importFromJSON(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        
+                        if (!data.nodes || !Array.isArray(data.nodes)) {
+                            throw new Error('Invalid file format: missing nodes array');
+                        }
+                        
+                        if (!data.connections || !Array.isArray(data.connections)) {
+                            throw new Error('Invalid file format: missing connections array');
+                        }
+                        
+                        this.nodes = data.nodes.map(n => Node.fromJSON(n));
+                        this.connections = data.connections.map(c => Connection.fromJSON(c));
+                        
+                        this.save();
+                        this.render();
+                        this.updateUI();
+                        document.getElementById('searchInput').value = '';
+                        this.search('');
+                        
+                        alert(`Imported ${this.nodes.length} nodes and ${this.connections.length} connections`);
+                    } catch (error) {
+                        alert('Failed to import file: ' + error.message);
+                        console.error(error);
+                    }
+                };
+                reader.readAsText(file);
+                
+                // Reset file input so same file can be imported again
+                event.target.value = '';
+            }
+
+            updateUI() {
+                const nodesList = document.getElementById('nodesList');
+                nodesList.innerHTML = this.nodes.map(node => {
+                    const isMatch = this.searchMatches.has(node.id);
+                    return `
+                        <div class="node-item ${isMatch ? 'search-match' : ''}" data-node-id="${node.id}">
+                            <div class="node-item-content">
+                                <div class="node-item-label">${this.escapeHtml(node.label)}</div>
+                                ${node.tags.length > 0 ? `
+                                    <div class="node-item-tags">
+                                        ${node.tags.map(tag => `<span class="tag">${this.escapeHtml(tag)}</span>`).join('')}
+                                    </div>
+                                ` : ''}
+                            </div>
+                            <button class="node-item-delete" onclick="nexusApp.deleteNode('${node.id}')">Delete</button>
+                        </div>
+                    `
+                }).join('');
+                
+                document.getElementById('nodeCount').textContent = this.nodes.length;
+                document.getElementById('connectionCount').textContent = this.connections.length;
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            render() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Draw connections
+                for (const conn of this.connections) {
+                    const fromNode = this.nodes.find(n => n.id === conn.fromNodeId);
+                    const toNode = this.nodes.find(n => n.id === conn.toNodeId);
+                    
+                    if (fromNode && toNode) {
+                        this.drawConnection(fromNode, toNode, conn.label);
+                    }
+                }
+                
+                // Draw connecting preview
+                if (this.connectingFrom) {
+                    this.ctx.strokeStyle = '#60a5fa';
+                    this.ctx.lineWidth = 2;
+                    this.ctx.setLineDash([5, 5]);
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(this.connectingFrom.x, this.connectingFrom.y);
+                    this.ctx.lineTo(this.canvas.width / 2, this.canvas.height / 2);
+                    this.ctx.stroke();
+                    this.ctx.setLineDash([]);
+                }
+                
+                // Draw nodes
+                for (const node of this.nodes) {
+                    this.drawNode(node, node === this.hoveredNode || node === this.connectingFrom);
+                }
+            }
+
+            drawNode(node, highlighted = false) {
+                const isSearchMatch = this.searchMatches.has(node.id);
+                
+                // Draw glow for search matches
+                if (isSearchMatch) {
+                    this.ctx.fillStyle = 'rgba(251, 191, 36, 0.1)';
+                    this.ctx.beginPath();
+                    this.ctx.arc(node.x, node.y, node.radius + 12, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
+                
+                const gradient = this.ctx.createRadialGradient(
+                    node.x - 15, node.y - 15, 0,
+                    node.x, node.y, node.radius
+                );
+                
+                if (highlighted || node === this.connectingFrom) {
+                    gradient.addColorStop(0, '#93c5fd');
+                    gradient.addColorStop(1, '#3b82f6');
+                } else if (isSearchMatch) {
+                    gradient.addColorStop(0, '#fcd34d');
+                    gradient.addColorStop(1, '#fbbf24');
+                } else {
+                    gradient.addColorStop(0, '#64748b');
+                    gradient.addColorStop(1, '#334155');
+                }
+                
+                this.ctx.fillStyle = gradient;
+                this.ctx.beginPath();
+                this.ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+                this.ctx.fill();
+                
+                let strokeColor = '#94a3b8';
+                let strokeWidth = 2;
+                
+                if (highlighted || node === this.connectingFrom) {
+                    strokeColor = '#60a5fa';
+                    strokeWidth = 3;
+                } else if (isSearchMatch) {
+                    strokeColor = '#fbbf24';
+                    strokeWidth = 3;
+                }
+                
+                this.ctx.strokeStyle = strokeColor;
+                this.ctx.lineWidth = strokeWidth;
+                this.ctx.stroke();
+                
+                this.ctx.fillStyle = '#e2e8f0';
+                this.ctx.font = 'bold 13px sans-serif';
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'middle';
+                
+                const maxWidth = node.radius * 1.8;
+                this.drawTextInCircle(node.label, node.x, node.y, maxWidth);
+            }
+
+            drawTextInCircle(text, x, y, maxWidth) {
+                const words = text.split(' ');
+                const lines = [];
+                let currentLine = '';
+                
+                for (const word of words) {
+                    const testLine = currentLine ? currentLine + ' ' + word : word;
+                    const metrics = this.ctx.measureText(testLine);
+                    
+                    if (metrics.width > maxWidth && currentLine) {
+                        lines.push(currentLine);
+                        currentLine = word;
+                    } else {
+                        currentLine = testLine;
+                    }
+                }
+                
+                if (currentLine) lines.push(currentLine);
+                
+                const lineHeight = 14;
+                const totalHeight = lineHeight * lines.length;
+                let startY = y - totalHeight / 2;
+                
+                for (const line of lines) {
+                    this.ctx.fillText(line, x, startY);
+                    startY += lineHeight;
+                }
+            }
+
+            drawConnection(fromNode, toNode, label = '') {
+                const dx = toNode.x - fromNode.x;
+                const dy = toNode.y - fromNode.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                const fromX = fromNode.x + (dx / distance) * fromNode.radius;
+                const fromY = fromNode.y + (dy / distance) * fromNode.radius;
+                const toX = toNode.x - (dx / distance) * toNode.radius;
+                const toY = toNode.y - (dy / distance) * toNode.radius;
+                
+                this.ctx.strokeStyle = '#64748b';
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                this.ctx.moveTo(fromX, fromY);
+                this.ctx.lineTo(toX, toY);
+                this.ctx.stroke();
+                
+                // Draw arrow
+                const arrowSize = 12;
+                const angle = Math.atan2(toY - fromY, toX - fromX);
+                this.ctx.fillStyle = '#64748b';
+                this.ctx.beginPath();
+                this.ctx.moveTo(toX, toY);
+                this.ctx.lineTo(toX - arrowSize * Math.cos(angle - Math.PI / 6), toY - arrowSize * Math.sin(angle - Math.PI / 6));
+                this.ctx.lineTo(toX - arrowSize * Math.cos(angle + Math.PI / 6), toY - arrowSize * Math.sin(angle + Math.PI / 6));
+                this.ctx.closePath();
+                this.ctx.fill();
+                
+                // Draw label if exists
+                if (label) {
+                    const midX = (fromX + toX) / 2;
+                    const midY = (fromY + toY) / 2;
+                    
+                    this.ctx.fillStyle = '#cbd5e1';
+                    this.ctx.font = '11px sans-serif';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    
+                    this.ctx.fillRect(midX - 30, midY - 12, 60, 20);
+                    this.ctx.fillStyle = '#0f172a';
+                    this.ctx.fillText(label, midX, midY);
+                }
+            }
+
+            save() {
+                const data = {
+                    nodes: this.nodes.map(n => n.toJSON()),
+                    connections: this.connections.map(c => c.toJSON())
+                };
+                localStorage.setItem('nexusboard_data', JSON.stringify(data));
+            }
+
+            load() {
+                try {
+                    const params = new URLSearchParams(window.location.search);
+                    if (params.has('board')) {
+                        try {
+                            const state = this.decodeState(params.get('board'));
+                            this.nodes = (state.nodes || []).map(n => Node.fromJSON(n));
+                            this.connections = (state.connections || []).map(c => Connection.fromJSON(c));
+                            this.updateUI();
+                            return;
+                        } catch (err) {
+                            console.error('Invalid shared board state:', err);
+                        }
+                    }
+
+                    const data = JSON.parse(localStorage.getItem('nexusboard_data') || '{}');
+                    
+                    if (data.nodes) {
+                        this.nodes = data.nodes.map(n => Node.fromJSON(n));
+                    }
+                    
+                    if (data.connections) {
+                        this.connections = data.connections.map(c => Connection.fromJSON(c));
+                    }
+                    
+                    this.updateUI();
+                } catch (e) {
+                    console.error('Failed to load data:', e);
+                }
+            }
+        }
+
+        // ============================================================================
+        // INITIALIZATION
+        // ============================================================================
+
+        const nexusApp = new NexusBoardApp();
+    </script>
+</body>
+</html>
