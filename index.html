@@ -539,6 +539,7 @@
                 this.dragOffset = null;
                 this.connectingFrom = null;
                 this.hoveredNode = null;
+                this.selectedNode = null;
                 this.searchQuery = '';
                 this.searchMatches = new Set();
                 this.cursorPosition = null;
@@ -729,6 +730,24 @@
                     e.preventDefault();
                 }
 
+                if (e.key === 'Escape') {
+                    if (this.editInput) {
+                        this.stopEditingNode();
+                    }
+                    if (this.selectedNode) {
+                        this.selectedNode = null;
+                        this.render();
+                    }
+                    e.preventDefault();
+                    return;
+                }
+
+                if (e.key === 'Delete' && this.selectedNode && document.activeElement !== this.editInput) {
+                    this.deleteNode(this.selectedNode.id);
+                    e.preventDefault();
+                    return;
+                }
+
                 if (e.ctrlKey || e.metaKey) {
                     if (e.key === 'z' && !e.shiftKey) {
                         e.preventDefault();
@@ -850,6 +869,11 @@
                     // Click on node to select/deselect
                     if (node) {
                         this.highlightNode(node);
+                    } else {
+                        if (this.selectedNode) {
+                            this.selectedNode = null;
+                            this.render();
+                        }
                     }
                 }
             }
@@ -865,6 +889,9 @@
             }
 
             highlightNode(node) {
+                this.selectedNode = node;
+                this.render();
+
                 // Scroll node into view in sidebar
                 const nodesList = document.getElementById('nodesList');
                 const nodeElement = nodesList.querySelector(`[data-node-id="${node.id}"]`);
@@ -954,6 +981,9 @@
             }
 
             deleteNode(nodeId) {
+                if (this.selectedNode && this.selectedNode.id === nodeId) {
+                    this.selectedNode = null;
+                }
                 this.nodes = this.nodes.filter(n => n.id !== nodeId);
                 this.connections = this.connections.filter(c => 
                     c.fromNodeId !== nodeId && c.toNodeId !== nodeId
@@ -1469,12 +1499,14 @@
 
             drawNode(node, highlighted = false) {
                 const isSearchMatch = this.searchMatches.has(node.id);
+                const isSelected = node === this.selectedNode;
+                const isHover = node === this.hoveredNode && !isSelected;
                 
-                // Draw glow for search matches
-                if (isSearchMatch) {
-                    this.ctx.fillStyle = 'rgba(251, 191, 36, 0.1)';
+                // Draw glow for search matches or selection
+                if (isSearchMatch || isSelected) {
+                    this.ctx.fillStyle = isSelected ? 'rgba(96, 165, 250, 0.12)' : 'rgba(251, 191, 36, 0.1)';
                     this.ctx.beginPath();
-                    this.ctx.arc(node.x, node.y, node.radius + 12, 0, Math.PI * 2);
+                    this.ctx.arc(node.x, node.y, node.radius + 14, 0, Math.PI * 2);
                     this.ctx.fill();
                 }
                 
@@ -1483,12 +1515,18 @@
                     node.x, node.y, node.radius
                 );
                 
-                if (highlighted || node === this.connectingFrom) {
+                if (isSelected) {
+                    gradient.addColorStop(0, '#93c5fd');
+                    gradient.addColorStop(1, '#2563eb');
+                } else if (highlighted || node === this.connectingFrom) {
                     gradient.addColorStop(0, '#93c5fd');
                     gradient.addColorStop(1, '#3b82f6');
                 } else if (isSearchMatch) {
                     gradient.addColorStop(0, '#fcd34d');
                     gradient.addColorStop(1, '#fbbf24');
+                } else if (isHover) {
+                    gradient.addColorStop(0, '#7c93b4');
+                    gradient.addColorStop(1, '#334155');
                 } else {
                     gradient.addColorStop(0, '#64748b');
                     gradient.addColorStop(1, '#334155');
@@ -1513,18 +1551,30 @@
                 let strokeColor = '#94a3b8';
                 let strokeWidth = 2 / this.camera.scale;
                 
-                if (highlighted || node === this.connectingFrom) {
+                if (isSelected) {
+                    strokeColor = '#60a5fa';
+                    strokeWidth = 4 / this.camera.scale;
+                } else if (highlighted || node === this.connectingFrom) {
                     strokeColor = '#60a5fa';
                     strokeWidth = 3 / this.camera.scale;
                 } else if (isSearchMatch) {
                     strokeColor = '#fbbf24';
                     strokeWidth = 3 / this.camera.scale;
+                } else if (isHover) {
+                    strokeColor = '#cbd5e1';
+                    strokeWidth = 2.5 / this.camera.scale;
+                    this.ctx.shadowColor = 'rgba(96, 165, 250, 0.12)';
+                    this.ctx.shadowBlur = 8 / this.camera.scale;
+                    this.ctx.shadowOffsetX = 0;
+                    this.ctx.shadowOffsetY = 0;
                 }
                 
                 this.ctx.strokeStyle = strokeColor;
                 this.ctx.lineWidth = strokeWidth;
                 this.drawRoundedRect(this.ctx, x, y, width, height, corner);
                 this.ctx.stroke();
+                this.ctx.shadowColor = 'transparent';
+                this.ctx.shadowBlur = 0;
                 
                 this.ctx.fillStyle = '#e2e8f0';
                 this.ctx.font = 'bold 13px sans-serif';
