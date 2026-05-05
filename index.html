@@ -268,6 +268,10 @@
             .canvas-container {
                 flex: 1;
             }
+
+            canvas {
+                min-height: 60vh;
+            }
         }
 
         .tag {
@@ -531,17 +535,15 @@
             }
 
             setupCanvas() {
-                const rect = this.canvas.parentElement.getBoundingClientRect();
-                this.canvas.width = rect.width;
-                this.canvas.height = rect.height;
-                window.addEventListener('resize', () => this.handleResize());
-            }
-
-            handleResize() {
-                const rect = this.canvas.parentElement.getBoundingClientRect();
-                this.canvas.width = rect.width;
-                this.canvas.height = rect.height;
-                this.render();
+                this.canvas.width = this.canvas.offsetWidth;
+                this.canvas.height = this.canvas.offsetHeight;
+                
+                const resizeObserver = new ResizeObserver(() => {
+                    this.canvas.width = this.canvas.offsetWidth;
+                    this.canvas.height = this.canvas.offsetHeight;
+                    this.render();
+                });
+                resizeObserver.observe(this.canvas);
             }
 
             setupEventListeners() {
