@@ -1,4 +1,12 @@
-<!DOCTYPE html>
+**Test 1 passed** ✅ — "My Startup" node was created successfully with correct tags and metadata.
+
+But there's one issue in the data:
+
+"My Startup" node landed at `x:600, y:360` — exactly on top of "Prototype" which is also at `x:600, y:360`. The anti-stacking fix isn't working for new nodes added after a template loads.
+
+**Fix prompt for Copilot:**
+
+> In index.html, fix createNode to always check existing node positions and place the new node at least 120px away from any existing node, searching in a spiral pattern outward from the canvas center until a free spot is found. Single file, no dependencies. Then git add index.html && git commit -m "Fix new node overlap after template load" && git push origin main && git push origin main:gh-pages.<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -732,7 +740,7 @@
                 return Math.round(value / gridSize) * gridSize;
             }
 
-            isPositionOverlapping(x, y, radius = 40, padding = 24, existingNodes = null) {
+            isPositionOverlapping(x, y, radius = 40, padding = 40, existingNodes = null) {
                 const nodes = existingNodes || this.nodes;
                 return nodes.some(node => {
                     const dx = node.x - x;
@@ -748,26 +756,55 @@
                 const maxX = bounds.right - 80;
                 const minY = bounds.top + 80;
                 const maxY = bounds.bottom - 80;
-                const startX = Math.min(Math.max(preferred?.x ?? (bounds.left + bounds.right) / 2, minX), maxX);
-                const startY = Math.min(Math.max(preferred?.y ?? (bounds.top + bounds.bottom) / 2, minY), maxY);
+                const center = {
+                    x: (bounds.left + bounds.right) / 2,
+                    y: (bounds.top + bounds.bottom) / 2
+                };
+                const origin = {
+                    x: Math.min(Math.max(preferred?.x ?? center.x, minX), maxX),
+                    y: Math.min(Math.max(preferred?.y ?? center.y, minY), maxY)
+                };
                 const gridStep = 120;
                 const nodesToCheck = existingNodes || this.nodes;
 
-                for (let ring = 0; ring <= 8; ring++) {
+                const tryPosition = (x, y) => {
+                    const snappedX = this.snapToGrid(x, gridStep);
+                    const snappedY = this.snapToGrid(y, gridStep);
+                    if (snappedX < minX || snappedX > maxX || snappedY < minY || snappedY > maxY) {
+                        return null;
+                    }
+                    if (!this.isPositionOverlapping(snappedX, snappedY, 40, 40, nodesToCheck)) {
+                        return { x: snappedX, y: snappedY };
+                    }
+                    return null;
+                };
+
+                const originCandidate = tryPosition(origin.x, origin.y);
+                if (originCandidate) {
+                    return originCandidate;
+                }
+
+                for (let ring = 1; ring <= 16; ring++) {
                     for (let dx = -ring; dx <= ring; dx++) {
                         for (let dy = -ring; dy <= ring; dy++) {
                             if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
-                            const x = this.snapToGrid(startX + dx * gridStep, gridStep);
-                            const y = this.snapToGrid(startY + dy * gridStep, gridStep);
-                            if (x < minX || x > maxX || y < minY || y > maxY) continue;
-                            if (!this.isPositionOverlapping(x, y, 40, 20, nodesToCheck)) {
-                                return { x, y };
+                            const candidate = tryPosition(center.x + dx * gridStep, center.y + dy * gridStep);
+                            if (candidate) {
+                                return candidate;
                             }
                         }
                     }
                 }
 
-                return { x: this.snapToGrid(startX, gridStep), y: this.snapToGrid(startY, gridStep) };
+                for (let x = minX; x <= maxX; x += gridStep) {
+                    for (let y = minY; y <= maxY; y += gridStep) {
+                        if (!this.isPositionOverlapping(x, y, 40, 40, nodesToCheck)) {
+                            return { x, y };
+                        }
+                    }
+                }
+
+                return { x: this.snapToGrid(origin.x, gridStep), y: this.snapToGrid(origin.y, gridStep) };
             }
 
             spaceNodesForTemplate(nodes) {
