@@ -410,6 +410,80 @@
         .node-highlight {
             filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.6));
         }
+
+        .context-menu {
+            position: absolute;
+            z-index: 250;
+            min-width: 200px;
+            background: rgba(15, 23, 42, 0.98);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 10px;
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+            color: #e2e8f0;
+            font-size: 13px;
+            backdrop-filter: blur(12px);
+            display: none;
+        }
+
+        .context-menu.visible {
+            display: block;
+        }
+
+        .context-menu-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #94a3b8;
+            margin-bottom: 10px;
+        }
+
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .color-swatch {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 10px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: border-color 0.15s ease, transform 0.15s ease;
+        }
+
+        .color-swatch:hover,
+        .color-swatch:focus {
+            outline: none;
+            transform: translateY(-1px);
+            border-color: #60a5fa;
+        }
+
+        .color-swatch.blue { background: #3b82f6; }
+        .color-swatch.green { background: #4ade80; }
+        .color-swatch.red { background: #f87171; }
+        .color-swatch.purple { background: #c084fc; }
+        .color-swatch.orange { background: #fb923c; }
+        .color-swatch.gray { background: #94a3b8; }
+
+        .context-menu-action {
+            width: 100%;
+            background: #111827;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 9px 10px;
+            color: #e2e8f0;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+
+        .context-menu-action:hover {
+            background: #1f2937;
+            border-color: #60a5fa;
+        }
     </style>
 </head>
 <body>
@@ -478,7 +552,7 @@
         // ============================================================================
 
         class Node {
-            constructor(x, y, label = '', tags = [], metadata = {}) {
+            constructor(x, y, label = '', tags = [], metadata = {}, color = 'gray') {
                 this.id = 'node_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                 this.label = label;
                 this.tags = tags;
@@ -487,6 +561,7 @@
                 this.radius = 40;
                 this.timestamp = new Date().toISOString();
                 this.metadata = metadata;
+                this.color = color;
             }
 
             toJSON() {
@@ -498,12 +573,13 @@
                     y: this.y,
                     radius: this.radius,
                     timestamp: this.timestamp,
-                    metadata: this.metadata
+                    metadata: this.metadata,
+                    color: this.color
                 };
             }
 
             static fromJSON(data) {
-                const node = new Node(data.x, data.y, data.label, data.tags, data.metadata);
+                const node = new Node(data.x, data.y, data.label, data.tags, data.metadata, data.color || 'gray');
                 node.id = data.id;
                 node.timestamp = data.timestamp;
                 return node;
@@ -559,6 +635,7 @@
                 this.searchQuery = '';
                 this.searchMatches = new Set();
                 this.cursorPosition = null;
+                this.activeContextNode = null;
 
                 this.camera = {
                     x: 0,
@@ -602,6 +679,19 @@
                 this.canvas.addEventListener('mouseleave', () => this.handleMouseUp());
                 this.canvas.addEventListener('wheel', (e) => this.handleWheel(e), { passive: false });
                 
+                document.addEventListener('click', (e) => {
+                    const menu = document.getElementById('nodeContextMenu');
+                    if (!menu) return;
+                    if (!menu.contains(e.target)) {
+                        this.hideContextMenu();
+                    }
+                });
+
+                const menu = document.getElementById('nodeContextMenu');
+                if (menu) {
+                    menu.addEventListener('click', (e) => this.handleContextMenuClick(e));
+                }
+
                 // Keyboard shortcuts and panning
                 document.addEventListener('keydown', (e) => this.handleKeyDown(e));
                 document.addEventListener('keyup', (e) => this.handleKeyUp(e));
@@ -964,7 +1054,9 @@
                 const node = this.getNodeAtPos(pos.x, pos.y);
                 
                 if (node) {
-                    this.deleteNode(node.id);
+                    this.showNodeContextMenu(node, e.clientX, e.clientY);
+                } else {
+                    this.hideContextMenu();
                 }
             }
 
@@ -1019,7 +1111,8 @@
                     safePosition.y,
                     label,
                     tags,
-                    metadata
+                    metadata,
+                    'gray'
                 );
                 
                 this.nodes.push(node);
@@ -1379,13 +1472,14 @@
             }
 
             drawNodeToCanvas(ctx, node) {
+                const [colorStart, colorEnd] = this.getNodeColors(node);
                 const gradient = ctx.createRadialGradient(
                     node.x - 15, node.y - 15, 0,
                     node.x, node.y, node.radius
                 );
                 
-                gradient.addColorStop(0, '#64748b');
-                gradient.addColorStop(1, '#334155');
+                gradient.addColorStop(0, colorStart);
+                gradient.addColorStop(1, colorEnd);
                 
                 ctx.fillStyle = gradient;
                 ctx.beginPath();
@@ -1593,6 +1687,7 @@
                     this.ctx.fill();
                 }
                 
+                const [colorStart, colorEnd] = this.getNodeColors(node);
                 const gradient = this.ctx.createRadialGradient(
                     node.x - 15, node.y - 15, 0,
                     node.x, node.y, node.radius
@@ -1611,8 +1706,8 @@
                     gradient.addColorStop(0, '#7c93b4');
                     gradient.addColorStop(1, '#334155');
                 } else {
-                    gradient.addColorStop(0, '#64748b');
-                    gradient.addColorStop(1, '#334155');
+                    gradient.addColorStop(0, colorStart);
+                    gradient.addColorStop(1, colorEnd);
                 }
                 
                 const width = node.radius * 2.6;
@@ -1666,6 +1761,18 @@
                 
                 const maxWidth = node.radius * 1.8;
                 this.drawTextInCircle(node.label, node.x, node.y, maxWidth);
+            }
+
+            getNodeColors(node) {
+                const palettes = {
+                    blue: ['#60a5fa', '#1e3a8a'],
+                    green: ['#4ade80', '#166534'],
+                    red: ['#f87171', '#991b1b'],
+                    purple: ['#c084fc', '#5b21b6'],
+                    orange: ['#fb923c', '#c2410c'],
+                    gray: ['#94a3b8', '#334155']
+                };
+                return palettes[node.color] || palettes.gray;
             }
 
             drawTextInCircle(text, x, y, maxWidth) {
@@ -1789,6 +1896,49 @@
                 this.save();
                 this.render();
                 this.updateUI();
+            }
+
+            setNodeColor(node, color) {
+                if (!node || !color) return;
+                node.color = color;
+                this.saveState();
+                this.save();
+                this.render();
+                this.updateUI();
+            }
+
+            showNodeContextMenu(node, clientX, clientY) {
+                const menu = document.getElementById('nodeContextMenu');
+                if (!menu) return;
+                this.activeContextNode = node;
+                menu.style.left = `${clientX}px`;
+                menu.style.top = `${clientY}px`;
+                menu.classList.add('visible');
+                menu.style.display = 'block';
+            }
+
+            hideContextMenu() {
+                const menu = document.getElementById('nodeContextMenu');
+                if (!menu) return;
+                menu.classList.remove('visible');
+                menu.style.display = 'none';
+                this.activeContextNode = null;
+            }
+
+            handleContextMenuClick(e) {
+                const button = e.target.closest('button');
+                if (!button) return;
+
+                const color = button.dataset.color;
+                const action = button.dataset.action;
+
+                if (color && this.activeContextNode) {
+                    this.setNodeColor(this.activeContextNode, color);
+                } else if (action === 'delete' && this.activeContextNode) {
+                    this.deleteNode(this.activeContextNode.id);
+                }
+
+                this.hideContextMenu();
             }
 
             save() {
