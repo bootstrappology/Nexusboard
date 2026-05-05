@@ -1,6 +1,6 @@
 # NexusBoard
 
-![Live demo](https://img.shields.io/badge/demo-live-blue)
+[![Live demo](https://img.shields.io/badge/demo-live-blue)](https://bootstrappology.github.io/Nexusboard/)
 
 NexusBoard is a local-first visual idea-linking web app for sketching connections, organizing thoughts, and building concept boards in the browser.
 
