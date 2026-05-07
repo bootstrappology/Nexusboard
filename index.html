@@ -556,7 +556,109 @@ But there's one issue in the data:
         </div>
     </div>
 
+    <div id="nodeContextMenu" class="context-menu">
+        <div class="context-menu-title">Node Color</div>
+        <div class="color-grid">
+            <button class="color-swatch blue" data-color="blue"></button>
+            <button class="color-swatch green" data-color="green"></button>
+            <button class="color-swatch red" data-color="red"></button>
+            <button class="color-swatch purple" data-color="purple"></button>
+            <button class="color-swatch orange" data-color="orange"></button>
+            <button class="color-swatch gray" data-color="gray"></button>
+        </div>
+        <button class="context-menu-action" data-action="delete">Delete Node</button>
+    </div>
+
     <script>
+        // ============================================================================
+        // IndexedDB ADAPTER
+        // ============================================================================
+
+        class DatabaseAdapter {
+            constructor() {
+                this.dbName = 'NexusBoard';
+                this.storeName = 'boards';
+                this.db = null;
+            }
+
+            async init() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(this.dbName, 1);
+
+                    request.onerror = () => {
+                        console.error('IndexedDB open error:', request.error);
+                        reject(request.error);
+                    };
+
+                    request.onsuccess = () => {
+                        this.db = request.result;
+                        this.migrateFromLocalStorage().then(resolve).catch(reject);
+                    };
+
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(this.storeName)) {
+                            db.createObjectStore(this.storeName);
+                        }
+                    };
+                });
+            }
+
+            async migrateFromLocalStorage() {
+                try {
+                    const migrationKey = 'nexusboard_migrated_to_idb';
+                    const alreadyMigrated = localStorage.getItem(migrationKey);
+
+                    if (alreadyMigrated) {
+                        return;
+                    }
+
+                    const legacyData = localStorage.getItem('nexusboard_data');
+                    if (legacyData) {
+                        await this.saveBoard(JSON.parse(legacyData));
+                        console.log('Migrated board data to IndexedDB');
+                    }
+
+                    localStorage.setItem(migrationKey, 'true');
+                } catch (error) {
+                    console.error('Migration error:', error);
+                }
+            }
+
+            async saveBoard(data) {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([this.storeName], 'readwrite');
+                    const store = transaction.objectStore(this.storeName);
+                    const request = store.put(data, 'currentBoard');
+
+                    request.onerror = () => reject(request.error);
+                    transaction.oncomplete = () => resolve();
+                });
+            }
+
+            async loadBoard() {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([this.storeName], 'readonly');
+                    const store = transaction.objectStore(this.storeName);
+                    const request = store.get('currentBoard');
+
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => resolve(request.result || {});
+                });
+            }
+
+            async clear() {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([this.storeName], 'readwrite');
+                    const store = transaction.objectStore(this.storeName);
+                    const request = store.clear();
+
+                    request.onerror = () => reject(request.error);
+                    transaction.oncomplete = () => resolve();
+                });
+            }
+        }
+
         // ============================================================================
         // DATA MODEL & PERSISTENCE
         // ============================================================================
@@ -663,8 +765,12 @@ But there's one issue in the data:
                 
                 this.setupCanvas();
                 this.setupEventListeners();
-                this.load(); setTimeout(() => { this.resizeCanvas(); this.render(); }, 200);
                 this.render();
+            }
+
+            async initialize() {
+                await this.load();
+                setTimeout(() => { this.resizeCanvas(); this.render(); }, 200);
             }
 
             setupCanvas() {
@@ -1980,15 +2086,15 @@ But there's one issue in the data:
                 this.hideContextMenu();
             }
 
-            save() {
+            async save() {
                 const data = {
                     nodes: this.nodes.map(n => n.toJSON()),
                     connections: this.connections.map(c => c.toJSON())
                 };
-                localStorage.setItem('nexusboard_data', JSON.stringify(data));
+                await db.saveBoard(data);
             }
 
-            load() {
+            async load() {
                 try {
                     const params = new URLSearchParams(window.location.search);
                     if (params.has('board')) {
@@ -2005,7 +2111,7 @@ But there's one issue in the data:
                         }
                     }
 
-                    const data = JSON.parse(localStorage.getItem('nexusboard_data') || '{}');
+                    const data = await db.loadBoard();
                     
                     if (data.nodes) {
                         this.nodes = data.nodes.map(n => Node.fromJSON(n));
@@ -2028,7 +2134,18 @@ But there's one issue in the data:
         // INITIALIZATION
         // ============================================================================
 
-        const nexusApp = new NexusBoardApp();
+        const db = new DatabaseAdapter();
+        let nexusApp;
+
+        (async () => {
+            try {
+                await db.init();
+                nexusApp = new NexusBoardApp();
+                await nexusApp.initialize();
+            } catch (error) {
+                console.error('Failed to initialize app:', error);
+            }
+        })();
     </script>
 </body>
 </html>
