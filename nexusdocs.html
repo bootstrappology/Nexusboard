@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexusDocs - Markdown Node Editor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            cursor: crosshair;
+            background: inherit;
+        }
+
+        .editor-panel {
+            width: 400px;
+            background: #0f172a;
+            border-left: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            position: relative;
+        }
+
+        .editor-panel.open {
+            transform: translateX(0);
+        }
+
+        .editor-header {
+            padding: 20px;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .editor-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .back-btn {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            border-radius: 6px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .back-btn:hover {
+            border-color: #60a5fa;
+            background: #0f172a;
+        }
+
+        .editor-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .editor-textarea {
+            flex: 1;
+            background: #1e293b;
+            border: none;
+            border-bottom: 1px solid #334155;
+            padding: 20px;
+            color: #e2e8f0;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: none;
+            outline: none;
+        }
+
+        .preview-panel {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #0f172a;
+        }
+
+        .preview-content {
+            color: #e2e8f0;
+            line-height: 1.6;
+        }
+
+        .preview-content h1 {
+            font-size: 24px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 8px;
+        }
+
+        .preview-content h2 {
+            font-size: 20px;
+            margin-bottom: 12px;
+            margin-top: 24px;
+        }
+
+        .preview-content h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            margin-top: 20px;
+        }
+
+        .preview-content p {
+            margin-bottom: 12px;
+        }
+
+        .preview-content ul, .preview-content ol {
+            margin-bottom: 12px;
+            margin-left: 20px;
+        }
+
+        .preview-content li {
+            margin-bottom: 4px;
+        }
+
+        .preview-content code {
+            background: #1e293b;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+        }
+
+        .preview-content pre {
+            background: #1e293b;
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin-bottom: 12px;
+        }
+
+        .preview-content pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .preview-content blockquote {
+            border-left: 4px solid #60a5fa;
+            padding-left: 16px;
+            margin-bottom: 12px;
+            color: #94a3b8;
+        }
+
+        .preview-content a {
+            color: #60a5fa;
+            text-decoration: none;
+        }
+
+        .preview-content a:hover {
+            text-decoration: underline;
+        }
+
+        .node {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            border: 2px solid #60a5fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+            color: white;
+            z-index: 10;
+        }
+
+        .node:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+        }
+
+        .node.selected {
+            border-color: #fbbf24;
+            box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.3);
+        }
+
+        .info-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 12px;
+            color: #94a3b8;
+            backdrop-filter: blur(10px);
+        }
+
+        .create-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 10px 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .create-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="canvas-container">
+            <canvas id="canvas"></canvas>
+            <div id="nodesContainer"></div>
+            <button class="create-btn" onclick="nexusDocs.createNode()">Create Node</button>
+            <div class="info-panel">
+                <strong>Nodes:</strong> <span id="nodeCount">0</span> |
+                <strong>Hint:</strong> Click nodes to edit notes
+            </div>
+        </div>
+        <div class="editor-panel" id="editorPanel">
+            <div class="editor-header">
+                <div class="editor-title" id="editorTitle">Node Notes</div>
+                <button class="back-btn" onclick="nexusDocs.closeEditor()">Back</button>
+            </div>
+            <div class="editor-content">
+                <textarea class="editor-textarea" id="editorTextarea" placeholder="Write your markdown notes here..."></textarea>
+                <div class="preview-panel">
+                    <div class="preview-content" id="previewContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class Node {
+            constructor(x, y, label = 'New Node') {
+                this.id = 'node_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                this.label = label;
+                this.x = x;
+                this.y = y;
+                this.element = null;
+            }
+
+            createElement() {
+                const div = document.createElement('div');
+                div.className = 'node';
+                div.textContent = this.label;
+                div.style.left = this.x - 40 + 'px';
+                div.style.top = this.y - 40 + 'px';
+                div.addEventListener('click', () => nexusDocs.openEditor(this));
+                this.element = div;
+                return div;
+            }
+
+            updatePosition() {
+                if (this.element) {
+                    this.element.style.left = this.x - 40 + 'px';
+                    this.element.style.top = this.y - 40 + 'px';
+                }
+            }
+        }
+
+        class NexusDocs {
+            constructor() {
+                this.canvas = document.getElementById('canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.nodesContainer = document.getElementById('nodesContainer');
+                this.editorPanel = document.getElementById('editorPanel');
+                this.editorTextarea = document.getElementById('editorTextarea');
+                this.previewContent = document.getElementById('previewContent');
+                this.editorTitle = document.getElementById('editorTitle');
+                this.nodeCount = document.getElementById('nodeCount');
+
+                this.nodes = [];
+                this.currentNode = null;
+                this.draggedNode = null;
+                this.dragOffset = { x: 0, y: 0 };
+
+                this.setupCanvas();
+                this.setupEventListeners();
+                this.loadNodes();
+                this.updateUI();
+            }
+
+            setupCanvas() {
+                this.resizeCanvas();
+                window.addEventListener('resize', () => this.resizeCanvas());
+            }
+
+            resizeCanvas() {
+                this.canvas.width = this.canvas.offsetWidth;
+                this.canvas.height = this.canvas.offsetHeight;
+                this.render();
+            }
+
+            setupEventListeners() {
+                this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
+                this.editorTextarea.addEventListener('input', () => this.updatePreview());
+                document.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+                document.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+                document.addEventListener('mouseup', () => this.handleMouseUp());
+            }
+
+            handleCanvasClick(e) {
+                if (e.target === this.canvas) {
+                    this.closeEditor();
+                }
+            }
+
+            handleMouseDown(e) {
+                if (e.target.classList.contains('node')) {
+                    const nodeId = e.target.dataset.nodeId;
+                    const node = this.nodes.find(n => n.id === nodeId);
+                    if (node) {
+                        this.draggedNode = node;
+                        const rect = node.element.getBoundingClientRect();
+                        this.dragOffset.x = e.clientX - rect.left - 40;
+                        this.dragOffset.y = e.clientY - rect.top - 40;
+                        e.preventDefault();
+                    }
+                }
+            }
+
+            handleMouseMove(e) {
+                if (this.draggedNode) {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left - this.dragOffset.x;
+                    const y = e.clientY - rect.top - this.dragOffset.y;
+                    this.draggedNode.x = Math.max(40, Math.min(x + 40, this.canvas.width - 40));
+                    this.draggedNode.y = Math.max(40, Math.min(y + 40, this.canvas.height - 40));
+                    this.draggedNode.updatePosition();
+                    this.saveNodes();
+                }
+            }
+
+            handleMouseUp() {
+                if (this.draggedNode) {
+                    this.draggedNode = null;
+                }
+            }
+
+            createNode() {
+                const x = Math.random() * (this.canvas.width - 160) + 80;
+                const y = Math.random() * (this.canvas.height - 160) + 80;
+                const node = new Node(x, y);
+                this.nodes.push(node);
+                this.nodesContainer.appendChild(node.createElement());
+                node.element.dataset.nodeId = node.id;
+                this.saveNodes();
+                this.updateUI();
+            }
+
+            openEditor(node) {
+                this.currentNode = node;
+                this.editorTitle.textContent = node.label;
+                this.editorTextarea.value = this.getNodeNotes(node.id);
+                this.updatePreview();
+                this.editorPanel.classList.add('open');
+                this.nodes.forEach(n => n.element.classList.remove('selected'));
+                node.element.classList.add('selected');
+            }
+
+            closeEditor() {
+                if (this.currentNode) {
+                    this.saveNodeNotes(this.currentNode.id, this.editorTextarea.value);
+                }
+                this.currentNode = null;
+                this.editorPanel.classList.remove('open');
+                this.nodes.forEach(n => n.element.classList.remove('selected'));
+            }
+
+            getNodeNotes(nodeId) {
+                return localStorage.getItem(`nexusdocs_notes_${nodeId}`) || '';
+            }
+
+            saveNodeNotes(nodeId, notes) {
+                localStorage.setItem(`nexusdocs_notes_${nodeId}`, notes);
+            }
+
+            updatePreview() {
+                const markdown = this.editorTextarea.value;
+                this.previewContent.innerHTML = this.markdownToHtml(markdown);
+            }
+
+            markdownToHtml(markdown) {
+                let html = markdown
+                    // Headers
+                    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                    // Bold
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    // Italic
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    // Links
+                    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+                    // Code blocks
+                    .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+                    // Inline code
+                    .replace(/`([^`]+)`/g, '<code>$1</code>')
+                    // Lists
+                    .replace(/^\- (.*$)/gim, '<li>$1</li>')
+                    .replace(/^\d+\. (.*$)/gim, '<li>$1</li>')
+                    // Blockquotes
+                    .replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>')
+                    // Paragraphs
+                    .replace(/\n\n/g, '</p><p>')
+                    .replace(/\n/g, '<br>');
+
+                // Wrap in paragraphs
+                if (!html.startsWith('<')) {
+                    html = '<p>' + html + '</p>';
+                }
+                html = html.replace(/<p><\/p>/g, '');
+
+                return html;
+            }
+
+            loadNodes() {
+                const saved = localStorage.getItem('nexusdocs_nodes');
+                if (saved) {
+                    const nodeData = JSON.parse(saved);
+                    this.nodes = nodeData.map(data => {
+                        const node = new Node(data.x, data.y, data.label);
+                        node.id = data.id;
+                        return node;
+                    });
+                    this.nodes.forEach(node => {
+                        this.nodesContainer.appendChild(node.createElement());
+                        node.element.dataset.nodeId = node.id;
+                    });
+                }
+            }
+
+            saveNodes() {
+                const nodeData = this.nodes.map(node => ({
+                    id: node.id,
+                    label: node.label,
+                    x: node.x,
+                    y: node.y
+                }));
+                localStorage.setItem('nexusdocs_nodes', JSON.stringify(nodeData));
+            }
+
+            updateUI() {
+                this.nodeCount.textContent = this.nodes.length;
+            }
+
+            render() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                // Background pattern
+                this.ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
+                for (let x = 0; x < this.canvas.width; x += 40) {
+                    for (let y = 0; y < this.canvas.height; y += 40) {
+                        if ((x + y) % 80 === 0) {
+                            this.ctx.fillRect(x, y, 40, 40);
+                        }
+                    }
+                }
+            }
+        }
+
+        const nexusDocs = new NexusDocs();
+    </script>
+</body>
+</html>
